@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏏 Cricket Tournament & Jersey Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; color: white; margin-bottom: 30px; }
+        header h1 { font-size: 32px; margin-bottom: 8px; }
+        .update-status { display: inline-block; background: rgba(255, 255, 255, 0.2); padding: 8px 16px; border-radius: 20px; font-size: 13px; margin-top: 12px; }
+        .tabs { display: flex; gap: 12px; margin-bottom: 24px; justify-content: center; flex-wrap: wrap; }
+        .tab-btn { padding: 11px 22px; border: none; border-radius: 6px; background: rgba(255, 255, 255, 0.2); color: white; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s; }
+        .tab-btn.active { background: white; color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .dashboard { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); margin-bottom: 20px; }
+        .dashboard-header { background: linear-gradient(135deg, #1F4E78 0%, #2d5f9c 100%); color: white; padding: 25px; text-align: center; }
+        .dashboard-header h2 { font-size: 24px; margin-bottom: 8px; }
+        .dashboard-content { padding: 25px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 30px; }
+        .stat-card { background: #f8f9fa; border-radius: 8px; padding: 16px; border-left: 4px solid #667eea; text-align: center; }
+        .stat-card.success { border-left-color: #10b981; }
+        .stat-card.danger { border-left-color: #ef4444; }
+        .stat-label { font-size: 12px; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #1F4E78; }
+        .stat-value.success { color: #10b981; }
+        .stat-value.danger { color: #ef4444; }
+        .progress-bar { width: 100%; height: 20px; background: #e5e7eb; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 600; }
+        .table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 20px; }
+        .table th { background: #f3f4f6; border-bottom: 2px solid #e5e7eb; padding: 10px; text-align: left; font-weight: 600; color: #1F4E78; }
+        .table td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+        .table tr:hover { background: #f9fafb; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 16px; font-size: 11px; font-weight: 600; }
+        .status-paid { background: #d1fae5; color: #065f46; }
+        .status-partial { background: #fef3c7; color: #92400e; }
+        .status-pending { background: #fee2e2; color: #7f1d1d; }
+        .form-section { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .form-section h3 { color: #1F4E78; margin-bottom: 16px; font-size: 16px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; color: #333; margin-bottom: 6px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .btn-submit { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s; width: 100%; }
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3); }
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        .alert-success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #7f1d1d; border-left: 4px solid #ef4444; }
+        @media (max-width: 768px) { header h1 { font-size: 22px; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏏 Cricket Tournament & Jersey Tracker</h1>
+            <div class="update-status">
+                <span id="lastUpdate">Loading data...</span>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tournament')">🏏 Tournament</button>
+            <button class="tab-btn" onclick="switchTab('jersey')">👕 Kids Jersey</button>
+            <button class="tab-btn" onclick="switchTab('manual')">📝 Manual Update</button>
+        </div>
+
+        <!-- TOURNAMENT TAB -->
+        <div id="tournament" class="tab-content active">
+            <div class="dashboard">
+                <div class="dashboard-header">
+                    <h2>School Cricket Tournament</h2>
+                    <p>Starts Friday, 9th October 2026</p>
+                </div>
+                <div class="dashboard-content">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Pledged</div>
+                            <div class="stat-value" id="pledged">LKR 220,000</div>
+                        </div>
+                        <div class="stat-card success">
+                            <div class="stat-label">Amount Received</div>
+                            <div class="stat-value success" id="received">LKR 80,000</div>
+                        </div>
+                        <div class="stat-card danger">
+                            <div class="stat-label">Outstanding</div>
+                            <div class="stat-value danger" id="outstanding">LKR 140,000</div>
+                        </div>
+                        <div class="stat-card success">
+                            <div class="stat-label">Balance in Hand</div>
+                            <div class="stat-value success" id="balance">LKR 45,000</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: #1F4E78; margin-bottom: 10px;">📊 Collection Progress</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 36.4%">36.4%</div>
+                        </div>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Contributor</th>
+                                <th>Pledged</th>
+                                <th>Received</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Sajith</td>
+                                <td>LKR 50,000</td>
+                                <td>LKR 50,000</td>
+                                <td><span class="status-badge status-paid">✓ Paid</span></td>
+                            </tr>
+                            <tr>
+                                <td>Kaleel</td>
+                                <td>LKR 25,000</td>
+                                <td>LKR 0</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Nufais</td>
+                                <td>LKR 20,000</td>
+                                <td>LKR 20,000</td>
+                                <td><span class="status-badge status-paid">✓ Paid</span></td>
+                            </tr>
+                            <tr>
+                                <td>Safras</td>
+                                <td>LKR 20,000</td>
+                                <td>LKR 0</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Azath</td>
+                                <td>LKR 20,000</td>
+                                <td>LKR 0</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Hashmath</td>
+                                <td>LKR 10,000</td>
+                                <td>LKR 10,000</td>
+                                <td><span class="status-badge status-paid">✓ Paid</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- JERSEY TAB -->
+        <div id="jersey" class="tab-content">
+            <div class="dashboard">
+                <div class="dashboard-header">
+                    <h2>Kids Jersey Tracking</h2>
+                    <p>26 kids jersey orders and parent payments</p>
+                </div>
+                <div class="dashboard-content">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Kids</div>
+                            <div class="stat-value">26</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Cost</div>
+                            <div class="stat-value">LKR 28,050</div>
+                        </div>
+                        <div class="stat-card success">
+                            <div class="stat-label">Amount Received</div>
+                            <div class="stat-value success" id="jerseyReceived">LKR 0</div>
+                        </div>
+                        <div class="stat-card danger">
+                            <div class="stat-label">Outstanding</div>
+                            <div class="stat-value danger" id="jerseyOutstanding">LKR 28,050</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: #1F4E78; margin-bottom: 10px;">📊 Collection Progress</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="jerseyProgressFill" style="width: 0%">0%</div>
+                        </div>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Parent</th>
+                                <th>Kids</th>
+                                <th>Total Owed</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Aun</td>
+                                <td>1</td>
+                                <td>LKR 1,100</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Kaleel</td>
+                                <td>2</td>
+                                <td>LKR 2,200</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Shaamil</td>
+                                <td>2</td>
+                                <td>LKR 2,200</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Sajith</td>
+                                <td>2</td>
+                                <td>LKR 2,200</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>Haris</td>
+                                <td>3</td>
+                                <td>LKR 3,300</td>
+                                <td><span class="status-badge status-pending">Pending</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- MANUAL UPDATE TAB -->
+        <div id="manual" class="tab-content">
+            <div class="dashboard">
+                <div class="dashboard-header">
+                    <h2>📝 Manual Update</h2>
+                    <p>Update data manually (save to Google Sheets yourself)</p>
+                </div>
+                <div class="dashboard-content">
+                    <div class="form-section">
+                        <h3>Add Tournament Income</h3>
+                        <form id="incomeForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Received From *</label>
+                                    <input type="text" id="incomeFrom" placeholder="e.g., Sajith" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Amount (LKR) *</label>
+                                    <input type="number" id="incomeAmount" placeholder="0" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-submit">💾 Log Income</button>
+                        </form>
+                        <div id="incomeMessage"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Add Expense</h3>
+                        <form id="expenseForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>What was bought? *</label>
+                                    <input type="text" id="expenseDesc" placeholder="e.g., Trophies" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Amount (LKR) *</label>
+                                    <input type="number" id="expenseAmount" placeholder="0" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-submit">💾 Log Expense</button>
+                        </form>
+                        <div id="expenseMessage"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Add Jersey Payment</h3>
+                        <form id="paymentForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Parent Name *</label>
+                                    <select id="parentSelect" required>
+                                        <option value="">-- Select Parent --</option>
+                                        <option>Aun</option>
+                                        <option>Azath</option>
+                                        <option>Farhan (S)</option>
+                                        <option>Haris</option>
+                                        <option>Hashmath</option>
+                                        <option>Ishrath</option>
+                                        <option>Kaleel</option>
+                                        <option>Nufais</option>
+                                        <option>Rimzan</option>
+                                        <option>Rishaf</option>
+                                        <option>Safras</option>
+                                        <option>Sajith</option>
+                                        <option>Shaamil</option>
+                                        <option>Zikrullah</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Amount (LKR) *</label>
+                                    <input type="number" id="paymentAmount" placeholder="0" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-submit">💾 Log Payment</button>
+                        </form>
+                        <div id="paymentMessage"></div>
+                    </div>
+
+                    <div class="alert alert-success">
+                        <strong>ℹ️ How it works:</strong> Fill in the forms above to log income, expenses, or payments. Copy the information and paste it into your Google Sheets manually. This keeps everything synced!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Form handlers
+        document.getElementById('incomeForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const from = document.getElementById('incomeFrom').value;
+            const amount = document.getElementById('incomeAmount').value;
+            document.getElementById('incomeMessage').innerHTML = `<div class="alert alert-success">✓ Income logged: ${from} - LKR ${amount}<br><strong>Now update your Google Sheets with this information!</strong></div>`;
+            e.target.reset();
+            setTimeout(() => { document.getElementById('incomeMessage').innerHTML = ''; }, 5000);
+        });
+
+        document.getElementById('expenseForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const desc = document.getElementById('expenseDesc').value;
+            const amount = document.getElementById('expenseAmount').value;
+            document.getElementById('expenseMessage').innerHTML = `<div class="alert alert-success">✓ Expense logged: ${desc} - LKR ${amount}<br><strong>Now update your Google Sheets with this information!</strong></div>`;
+            e.target.reset();
+            setTimeout(() => { document.getElementById('expenseMessage').innerHTML = ''; }, 5000);
+        });
+
+        document.getElementById('paymentForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const parent = document.getElementById('parentSelect').value;
+            const amount = document.getElementById('paymentAmount').value;
+            document.getElementById('paymentMessage').innerHTML = `<div class="alert alert-success">✓ Payment logged: ${parent} - LKR ${amount}<br><strong>Now update your Google Sheets with this information!</strong></div>`;
+            e.target.reset();
+            setTimeout(() => { document.getElementById('paymentMessage').innerHTML = ''; }, 5000);
+        });
+    </script>
+</body>
+</html>
