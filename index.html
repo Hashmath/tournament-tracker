@@ -75,6 +75,7 @@
 
   .tabs { display: flex; gap: 4px; }
   .tab { background: transparent; border: 0; color: var(--board-muted); font: 600 15px "Barlow", Arial, sans-serif; padding: 12px 16px; border-radius: 8px 8px 0 0; cursor: pointer; }
+  .tab { text-transform: uppercase; letter-spacing: .8px; font-size: 14px; }
   .tab[aria-selected="true"] { background: var(--bg); color: var(--pitch-dark); }
   .tab:focus-visible, .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 
@@ -194,10 +195,10 @@
     </div>
 
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">TEAM FUND</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">KIDS JERSEY PAYMENTS</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="list">JERSEY LIST</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>ADMIN</button>
+      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Team fund</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey payments</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="list">Jersey list</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
     </div>
   </div>
 </header>
@@ -321,7 +322,7 @@
     <section class="panel">
       <h2>Admin PIN</h2>
       <form class="admin" id="pinForm">
-        <label>PIN<input type="password" id="pin" autocomplete="current-password" required></label>
+        <label>PIN<input type="password" id="pin" autocomplete="new-password" inputmode="numeric" required></label>
         <div class="actions"><button class="btn" type="submit">Check PIN</button><span class="msg" id="pinMsg"></span></div>
       </form>
     </section>
@@ -733,7 +734,6 @@ async function adminPost(payload, pin) {
 
     if (res) {
       if (!res.ok) throw new Error(res.error || "The entry wasn't saved.");
-      try { sessionStorage.setItem("cricket-admin-pin", pin); } catch {}
       return res;
     }
     if (attempt < 3) await new Promise(ok => setTimeout(ok, 1000 * attempt));
@@ -787,7 +787,9 @@ function wireForm(id, build, describe) {
 
 if (IS_ADMIN) {
   $("adminTabBtn").hidden = false;
-  try { $("pin").value = sessionStorage.getItem("cricket-admin-pin") || ""; } catch {}
+  // The PIN is never stored: leaving the admin view or reloading means entering it again.
+  try { sessionStorage.removeItem("cricket-admin-pin"); } catch {}
+  $("pin").value = "";
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   document.querySelectorAll('form.admin input[type="date"]').forEach(i => i.value = today);
   loadLists();
@@ -821,6 +823,8 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   $("tab-tournament").hidden = t.dataset.tab !== "tournament";
   $("tab-jersey").hidden = t.dataset.tab !== "jersey";
   $("tab-admin").hidden = t.dataset.tab !== "admin";
+  // Leaving the Admin tab clears the PIN; entries already saving keep going.
+  if (t.dataset.tab !== "admin") { $("pin").value = ""; $("pinMsg").textContent = ""; }
   $("tab-list").hidden = t.dataset.tab !== "list";
 }));
 $("refresh").addEventListener("click", () => load(true));
