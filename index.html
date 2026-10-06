@@ -92,11 +92,17 @@
   .jgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; padding: 4px 16px 16px; }
   .jcard { background: #F8FAF8; border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 10px; text-align: center; }
   .jcard svg { width: 100%; max-width: 104px; height: auto; display: block; margin: 0 auto; }
-  .jcard .shirt { fill: var(--pitch); }
-  .jcard.kid .shirt { fill: var(--ball); }
-  .jcard .trim { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; }
-  .jcard .jname { fill: #fff; font: 600 9px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .6px; }
-  .jcard .jno { fill: #fff; font: 700 34px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; }
+  /* Team kit: black dragon-scale body, maroon yoke and sleeves, gold piping, black-and-gold cuffs, gold lettering */
+  .jcard .sleeves { fill: #7A1424; }
+  .jcard .body { fill: url(#kitFade); }
+  .jcard .scales { fill: url(#kitScales); }
+  .jcard .pipe { fill: none; stroke: #E3A93B; stroke-width: 1.3; stroke-linecap: round; }
+  .jcard .yoke { fill: #7A1424; }
+  .jcard .cuff { fill: none; stroke: #0E0E0E; stroke-width: 3.4; }
+  .jcard .collar { fill: none; stroke: #0E0E0E; stroke-width: 3.2; stroke-linecap: round; }
+  .jcard .jname { fill: #F0B54A; font: 700 8.5px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .5px; }
+  .jcard .jno { fill: #F0B54A; stroke: #2B1C00; stroke-width: .9; paint-order: stroke; font: 700 33px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; }
+  .jcard .jteam { fill: #F0B54A; font: 600 4.4px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .3px; }
   .jmeta { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
   .chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 1px 9px; font-size: 13px; font-weight: 600; }
   .chip.long { background: var(--part-bg); border-color: #EBCB72; color: var(--part-fg); }
@@ -108,6 +114,17 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="kitFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D0D0D"/><stop offset=".55" stop-color="#151515"/><stop offset="1" stop-color="#303030"/>
+    </linearGradient>
+    <pattern id="kitScales" width="7" height="5" patternUnits="userSpaceOnUse">
+      <path d="M0 5 A3.5 3.5 0 0 1 7 5 M-3.5 2.5 A3.5 3.5 0 0 1 3.5 2.5 M3.5 2.5 A3.5 3.5 0 0 1 10.5 2.5" fill="none" stroke="#5A5A5A" stroke-opacity=".6" stroke-width=".5"/>
+    </pattern>
+    <path id="kitNameArc" d="M27 45 Q50 29 73 45"/>
+  </defs>
+</svg>
 
 <header class="board">
   <div class="board-inner">
@@ -526,16 +543,28 @@ async function load(force) {
 const cleanNo = v => /^\d+$/.test(v) ? String(parseInt(v, 10)) : v;
 const SHORT = "M31 8 L43 3 Q50 11 57 3 L69 8 L93 24 L83 39 L74 33 L74 92 L26 92 L26 33 L17 39 L7 24 Z";
 const LONG  = "M31 8 L43 3 Q50 11 57 3 L69 8 L85 20 L97 66 L85 70 L74 36 L74 92 L26 92 L26 36 L15 70 L3 66 L15 20 Z";
+const TORSO = "M31 8 L43 3 Q50 11 57 3 L69 8 L74 34 L74 92 L26 92 L26 34 Z";
+const YOKE  = "M31 8 L43 3 Q50 11 57 3 L69 8 L74 34 Q50 13 26 34 Z";
 function jerseyCard(p, kid) {
   const long = /long/i.test(p.sleeve || "");
   const name = esc(p.name.toUpperCase());
-  const fit = p.name.length > 9 ? ` textLength="40" lengthAdjust="spacingAndGlyphs"` : "";
-  return `<div class="jcard${kid ? " kid" : ""}">
+  const fit = p.name.length > 6 ? ` textLength="34" lengthAdjust="spacingAndGlyphs"` : "";
+  // Cuff: black band with a gold stripe at the end of each sleeve.
+  const cuffBand = long ? "M95.6 62 L84.2 66 M4.4 62 L15.8 66" : "M90.5 22.5 L81 37 M9.5 22.5 L19 37";
+  const cuffGold = long ? "M95 59.5 L83.5 63.5 M5 59.5 L16.5 63.5" : "M88.6 21.2 L79.3 35.4 M11.4 21.2 L20.7 35.4";
+  return `<div class="jcard">
     <svg viewBox="0 0 100 96" role="img" aria-label="${name}, number ${esc(p.no)}, size ${esc(p.size)}">
-      <path class="shirt" d="${long ? LONG : SHORT}"/>
-      <path class="trim" d="M43 3 Q50 11 57 3"/>
-      <text class="jname" x="50" y="30" text-anchor="middle"${fit}>${name}</text>
-      <text class="jno num" x="50" y="70" text-anchor="middle">${esc(p.no || "–")}</text>
+      <path class="sleeves" d="${long ? LONG : SHORT}"/>
+      <path class="body" d="${TORSO}"/>
+      <path class="scales" d="${TORSO}"/>
+      <path class="yoke" d="${YOKE}"/>
+      <path class="pipe" d="M26 34 Q50 13 74 34"/>
+      <path class="cuff" d="${cuffBand}"/>
+      <path class="pipe" d="${cuffGold}"/>
+      <path class="collar" d="M42 3.5 Q50 11.5 58 3.5"/>
+      <text class="jname"><textPath href="#kitNameArc" startOffset="50%" text-anchor="middle"${fit}>${name}</textPath></text>
+      <text class="jno" x="50" y="68" text-anchor="middle">${esc(p.no || "–")}</text>
+      <text class="jteam" x="50" y="77" text-anchor="middle" textLength="34" lengthAdjust="spacingAndGlyphs">GINTOTA ZAHIRIANS</text>
     </svg>
     <div class="jmeta"><span class="chip">${esc(p.size || "–")}</span>${long ? `<span class="chip long">Long sleeve</span>` : ""}</div>
     ${kid && p.parent ? `<div class="jsub">${esc(p.parent)}</div>` : ""}
