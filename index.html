@@ -111,7 +111,8 @@
 
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Tournament</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey payments</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="list">Jersey list</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
     </div>
   </div>
@@ -202,6 +203,40 @@
     </section>
   </div>
 
+  <!-- JERSEY LIST -->
+  <div id="tab-list" hidden>
+    <div class="stats">
+      <div class="stat"><div class="k">Adults</div><div class="v num" id="lAdults">–</div></div>
+      <div class="stat"><div class="k">Kids</div><div class="v num" id="lKids">–</div></div>
+      <div class="stat"><div class="k">Total jerseys</div><div class="v num" id="lTotal">–</div></div>
+      <div class="stat"><div class="k">Long sleeve</div><div class="v num" id="lLong">–</div></div>
+    </div>
+
+    <section class="panel">
+      <h2>Sizes</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Size</th><th class="r">Adults</th><th class="r">Kids</th><th class="r">Total</th></tr></thead>
+        <tbody id="sizeBody"></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Adults</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Name</th><th>Size</th><th class="r">No.</th><th>Sleeve</th></tr></thead>
+        <tbody id="adultBody"></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Kids</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Name</th><th>Size</th><th class="r">No.</th><th>Parent</th></tr></thead>
+        <tbody id="kidBody"></tbody>
+      </table></div>
+    </section>
+  </div>
+
   <!-- ADMIN (only shown when the page is opened with ?admin) -->
   <div id="tab-admin" hidden>
     <section class="panel">
@@ -243,6 +278,18 @@
     </section>
 
     <section class="panel">
+      <h2>Add kids jersey payment</h2>
+      <form class="admin" id="jerseyForm">
+        <label>Date<input type="date" name="date" required></label>
+        <label>Parent<select name="parent" id="parentSelect" required></select></label>
+        <label>Amount (LKR)<input type="number" name="amount" min="1" step="any" inputmode="decimal" required></label>
+        <label>Method<select name="method" id="jMethodSelect"></select></label>
+        <label>Notes<input name="notes"></label>
+        <div class="actions"><button class="btn" type="submit">Add jersey payment</button><span class="msg"></span></div>
+      </form>
+    </section>
+
+    <section class="panel">
       <h2>Add contributor</h2>
       <form class="admin" id="contribForm">
         <label>Name<input name="name" required></label>
@@ -264,7 +311,9 @@ const SOURCES = {
   income:       { id: TOURNAMENT_SHEET_ID, tab: "Income" },
   expenses:     { id: TOURNAMENT_SHEET_ID, tab: "Expenses" },
   contributors: { id: TOURNAMENT_SHEET_ID, tab: "Contributors" },
-  parents:      { id: JERSEY_SHEET_ID,     tab: "Parent Payments" }
+  parents:      { id: JERSEY_SHEET_ID,     tab: "Parent Payments" },
+  kids:         { id: JERSEY_SHEET_ID,     tab: "Kids Roster",  optional: true },
+  adults:       { id: JERSEY_SHEET_ID,     tab: "Adult Roster", optional: true }
 };
 
 // Web app URL from Apps Script (Deploy → Manage deployments). Used only by the Admin tab.
@@ -324,7 +373,11 @@ async function fetchTab({ id, tab }) {
 
 async function fetchAll() {
   const keys = Object.keys(SOURCES);
-  const results = await Promise.all(keys.map(k => fetchTab(SOURCES[k])));
+  // A missing optional tab (e.g. Adult Roster not created yet) shouldn't stop the rest of the dashboard.
+  const results = await Promise.all(keys.map(k => fetchTab(SOURCES[k]).catch(err => {
+    if (SOURCES[k].optional) return [];
+    throw err;
+  })));
   return Object.fromEntries(keys.map((k, i) => [k, results[i]]));
 }
 
@@ -417,6 +470,8 @@ function render(data, time) {
     kids += p.kids; cost += p.total; paid += p.paid;
     return `<tr><td>${esc(p.name)}</td><td class="r num">${fmt(p.kids)}</td><td class="r num">${fmt(p.total)}</td><td class="r num">${fmt(p.paid)}</td><td class="r num">${fmt(Math.max(p.total - p.paid, 0))}</td><td>${badge(status(p.paid, p.total))}</td></tr>`;
   }).join("");
+  fillParentSelect(parents.map(p => p.name));
+  renderJerseyList(data);
   const jpct = cost ? paid / cost * 100 : 0;
   $("jKids").textContent = fmt(kids);
   $("jCost").textContent = fmt(cost);
@@ -456,6 +511,39 @@ async function load(force) {
   }
 }
 
+/* ===== Jersey list ===== */
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL"];
+function renderJerseyList(data) {
+  const adults = (data.adults || []).map(r => ({
+    name: String(pick(r, "name")).trim(), size: String(pick(r, "size")).trim().toUpperCase(),
+    no: String(pick(r, "jerseyno", "no", "number")).trim(), sleeve: String(pick(r, "sleeve")).trim()
+  })).filter(r => r.name);
+  const kids = (data.kids || []).map(r => ({
+    name: String(pick(r, "kidname", "name")).trim(), size: String(pick(r, "size")).trim().toUpperCase(),
+    no: String(pick(r, "number", "no")).trim(), parent: String(pick(r, "parent")).trim()
+  })).filter(r => r.name && norm(r.name) !== "total");
+
+  $("lAdults").textContent = adults.length;
+  $("lKids").textContent = kids.length;
+  $("lTotal").textContent = adults.length + kids.length;
+  $("lLong").textContent = adults.filter(a => /long/i.test(a.sleeve)).length;
+
+  const sizes = {};
+  adults.forEach(a => { (sizes[a.size] ||= { a: 0, k: 0 }).a++; });
+  kids.forEach(k => { (sizes[k.size] ||= { a: 0, k: 0 }).k++; });
+  const rank = sz => { const i = SIZE_ORDER.indexOf(sz); return i < 0 ? 99 : i; };
+  $("sizeBody").innerHTML = Object.keys(sizes).sort((x, y) => rank(x) - rank(y)).map(sz =>
+    `<tr><td>${esc(sz || "–")}</td><td class="r num">${sizes[sz].a}</td><td class="r num">${sizes[sz].k}</td><td class="r num">${sizes[sz].a + sizes[sz].k}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="empty">No jerseys listed yet.</td></tr>`;
+
+  $("adultBody").innerHTML = adults.length
+    ? adults.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.size)}</td><td class="r num">${esc(a.no)}</td><td>${esc(a.sleeve)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty">No adult jerseys found. Create the "Adult Roster" tab in the Kids Jersey sheet, with Name, Size, Jersey No and Sleeve in row 1.</td></tr>`;
+  $("kidBody").innerHTML = kids.length
+    ? kids.map(k => `<tr><td>${esc(k.name)}</td><td>${esc(k.size)}</td><td class="r num">${esc(k.no)}</td><td>${esc(k.parent)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty">No kids found. In the "Kids Roster" tab, make sure the headers (#, Kid Name, Size, Number, Parent) are in row 1.</td></tr>`;
+}
+
 /* ===== Admin ===== */
 const IS_ADMIN = /[?&#]admin\b/.test(location.search + location.hash);
 const DEFAULT_LISTS = {
@@ -464,6 +552,12 @@ const DEFAULT_LISTS = {
   methods: ["Cash", "Bank transfer", "Online", "Cheque", "Other"]
 };
 const opts = (list, keep) => list.map(v => `<option${v === keep ? " selected" : ""}>${esc(v)}</option>`).join("");
+
+function fillParentSelect(names) {
+  const sel = $("parentSelect"); if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">Choose…</option>` + opts(names, keep);
+}
 
 function fillFromSelect(names) {
   const sel = $("fromSelect"); if (!sel) return;
@@ -485,18 +579,37 @@ async function loadLists() {
   $("catSelect").innerHTML = opts(lists.categories);
   $("typeSelect").innerHTML = opts(lists.types);
   $("methodSelect").innerHTML = opts(lists.methods);
+  $("jMethodSelect").innerHTML = opts(lists.methods);
 }
 
+// Google sometimes answers with an HTML page instead of JSON even though the entry was saved.
+// Each entry carries a request ID, so retrying is safe: the script returns the saved result instead of adding a second row.
 async function adminPost(payload) {
-  if (ADMIN_URL.startsWith("PASTE_")) throw new Error("The Apps Script web app URL hasn't been added to index.html yet.");
+  if (!ADMIN_URL || ADMIN_URL.startsWith("PASTE_")) throw new Error("The Apps Script web app URL hasn't been added to index.html yet.");
   const pin = $("pin").value;
   if (!pin) throw new Error("Enter the admin PIN first.");
-  // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
-  const r = await fetch(ADMIN_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ ...payload, pin }) });
-  const res = await r.json();
-  if (!res.ok) throw new Error(res.error || "The entry wasn't saved.");
-  try { sessionStorage.setItem("cricket-admin-pin", pin); } catch {}
-  return res;
+  const requestId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random().toString(36).slice(2));
+  const body = JSON.stringify({ ...payload, pin, requestId });
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let res = null;
+    try {
+      // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
+      const r = await fetch(ADMIN_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body });
+      const text = await r.text();
+      try { res = JSON.parse(text); } catch { res = null; }
+    } catch { res = null; }
+
+    if (res) {
+      if (!res.ok) throw new Error(res.error || "The entry wasn't saved.");
+      try { sessionStorage.setItem("cricket-admin-pin", pin); } catch {}
+      return res;
+    }
+    if (attempt < 3) await new Promise(ok => setTimeout(ok, 1500 * attempt));
+  }
+  const e = new Error("Google didn't confirm the save. It may have gone through, so check the dashboard after it refreshes before adding it again.");
+  e.uncertain = true;
+  throw e;
 }
 
 function wireForm(id, build) {
@@ -516,6 +629,7 @@ function wireForm(id, build) {
       setTimeout(() => load(true), 1500); // give Google a moment, then refresh the figures
     } catch (err) {
       msg.className = "msg bad"; msg.textContent = err.message;
+      if (err.uncertain) setTimeout(() => load(true), 1500);
     } finally {
       btn.disabled = false; btn.textContent = label;
     }
@@ -548,6 +662,7 @@ if (IS_ADMIN) {
   }));
   wireForm("expenseForm", f => ({ action: "expense", ...f }));
   wireForm("contribForm", f => ({ action: "contributor", ...f }));
+  wireForm("jerseyForm", f => ({ action: "jersey", ...f }));
 }
 
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
@@ -555,6 +670,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   $("tab-tournament").hidden = t.dataset.tab !== "tournament";
   $("tab-jersey").hidden = t.dataset.tab !== "jersey";
   $("tab-admin").hidden = t.dataset.tab !== "admin";
+  $("tab-list").hidden = t.dataset.tab !== "list";
 }));
 $("refresh").addEventListener("click", () => load(true));
 load(false);
