@@ -81,6 +81,13 @@
   .notice { background: #FFF4D6; border: 1px solid #EBCB72; color: #5A4300; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 15px; }
   .notice.err { background: #FDE8E8; border-color: #EBA3A3; color: #7A1A1A; }
   [hidden] { display: none !important; }
+  form.admin { padding: 4px 16px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  form.admin label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 500; color: var(--muted); }
+  form.admin input, form.admin select { font: 16px "Barlow", Arial, sans-serif; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  form.admin input:focus, form.admin select:focus { outline: 2px solid var(--gold); border-color: var(--gold); }
+  form.admin .actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .msg { font-size: 14px; }
+  .msg.ok { color: var(--pitch); } .msg.bad { color: var(--ball); }
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 </head>
@@ -105,6 +112,7 @@
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Tournament</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
     </div>
   </div>
 </header>
@@ -193,6 +201,56 @@
       </table></div>
     </section>
   </div>
+
+  <!-- ADMIN (only shown when the page is opened with ?admin) -->
+  <div id="tab-admin" hidden>
+    <section class="panel">
+      <h2>Admin PIN</h2>
+      <form class="admin" id="pinForm">
+        <label>PIN<input type="password" id="pin" autocomplete="current-password" required></label>
+        <div class="actions"><button class="btn" type="submit">Check PIN</button><span class="msg" id="pinMsg"></span></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Add income</h2>
+      <form class="admin" id="incomeForm">
+        <label>Date<input type="date" name="date" required></label>
+        <label>Received from
+          <select name="fromSelect" id="fromSelect" required></select>
+        </label>
+        <label id="fromOtherWrap" hidden>Name (sponsor or donor)<input name="fromOther" id="fromOther"></label>
+        <label>Type<select name="type" id="typeSelect"></select></label>
+        <label>Amount (LKR)<input type="number" name="amount" min="1" step="any" inputmode="decimal" required></label>
+        <label>Method<select name="method" id="methodSelect"></select></label>
+        <label>Notes<input name="notes"></label>
+        <div class="actions"><button class="btn" type="submit">Add income</button><span class="msg"></span></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Add expense</h2>
+      <form class="admin" id="expenseForm">
+        <label>Date<input type="date" name="date" required></label>
+        <label>Category<select name="category" id="catSelect" required></select></label>
+        <label>Description<input name="description" required></label>
+        <label>Paid to<input name="paidTo"></label>
+        <label>Amount (LKR)<input type="number" name="amount" min="1" step="any" inputmode="decimal" required></label>
+        <label>Paid by<input name="paidBy"></label>
+        <label>Notes<input name="notes"></label>
+        <div class="actions"><button class="btn" type="submit">Add expense</button><span class="msg"></span></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Add contributor</h2>
+      <form class="admin" id="contribForm">
+        <label>Name<input name="name" required></label>
+        <label>Pledged (LKR)<input type="number" name="pledged" min="1" step="any" inputmode="decimal" required></label>
+        <div class="actions"><button class="btn" type="submit">Add contributor</button><span class="msg"></span></div>
+      </form>
+    </section>
+  </div>
 </main>
 
 <script>
@@ -208,6 +266,9 @@ const SOURCES = {
   contributors: { id: TOURNAMENT_SHEET_ID, tab: "Contributors" },
   parents:      { id: JERSEY_SHEET_ID,     tab: "Parent Payments" }
 };
+
+// Web app URL from Apps Script (Deploy → Manage deployments). Used only by the Admin tab.
+const ADMIN_URL = "https://script.google.com/macros/s/AKfycbx0ryT47Agk4JcG_s-bpjacGcb0iqnPpWcbm1M_vJmQNeS_a10X_diM2aNI-rgf9a-hHg/exec";
 
 // Reload the data automatically every this many seconds while the page is open.
 const AUTO_REFRESH_SECONDS = 60;
@@ -305,6 +366,7 @@ function render(data, time) {
   const byName = {};
   income.forEach(r => { byName[norm(r.from)] = (byName[norm(r.from)] || 0) + r.amount; });
   const pledgeKeys = new Set(pledges.map(r => norm(r.name)));
+  fillFromSelect(pledges.map(r => r.name));
 
   let pledged = 0, outstanding = 0, rows = "";
   for (const { name, pledged: p } of pledges) {
@@ -394,10 +456,105 @@ async function load(force) {
   }
 }
 
+/* ===== Admin ===== */
+const IS_ADMIN = /[?&#]admin\b/.test(location.search + location.hash);
+const DEFAULT_LISTS = {
+  categories: ["Jersey / Uniforms", "Cricket Balls & Equipment", "Tent", "Food & Refreshments", "Printing & Banners", "Membership", "Team Registration", "Website Renewal", "Other"],
+  types: ["Contribution", "Sponsorship", "Registration fee", "Donation", "Other"],
+  methods: ["Cash", "Bank transfer", "Online", "Cheque", "Other"]
+};
+const opts = (list, keep) => list.map(v => `<option${v === keep ? " selected" : ""}>${esc(v)}</option>`).join("");
+
+function fillFromSelect(names) {
+  const sel = $("fromSelect"); if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">Choose…</option>` + opts(names, keep) + `<option value="__other"${keep === "__other" ? " selected" : ""}>Someone else…</option>`;
+}
+
+async function loadLists() {
+  let lists = DEFAULT_LISTS;
+  try {
+    const rows = await fetchTab({ id: TOURNAMENT_SHEET_ID, tab: "Lists" });
+    const col = p => rows.map(r => String(pick(r, p) || "").trim()).filter(Boolean);
+    lists = {
+      categories: col("expensecateg").length ? col("expensecateg") : DEFAULT_LISTS.categories,
+      types: col("incometype").length ? col("incometype") : DEFAULT_LISTS.types,
+      methods: col("paymentmethod").length ? col("paymentmethod") : DEFAULT_LISTS.methods
+    };
+  } catch {}
+  $("catSelect").innerHTML = opts(lists.categories);
+  $("typeSelect").innerHTML = opts(lists.types);
+  $("methodSelect").innerHTML = opts(lists.methods);
+}
+
+async function adminPost(payload) {
+  if (ADMIN_URL.startsWith("PASTE_")) throw new Error("The Apps Script web app URL hasn't been added to index.html yet.");
+  const pin = $("pin").value;
+  if (!pin) throw new Error("Enter the admin PIN first.");
+  // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
+  const r = await fetch(ADMIN_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ ...payload, pin }) });
+  const res = await r.json();
+  if (!res.ok) throw new Error(res.error || "The entry wasn't saved.");
+  try { sessionStorage.setItem("cricket-admin-pin", pin); } catch {}
+  return res;
+}
+
+function wireForm(id, build) {
+  const form = $(id);
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = form.querySelector("button"), msg = form.querySelector(".msg");
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…"; msg.className = "msg"; msg.textContent = "";
+    try {
+      const res = await adminPost(build(Object.fromEntries(new FormData(form))));
+      msg.className = "msg ok"; msg.textContent = res.message;
+      const keepDate = form.elements.date && form.elements.date.value;
+      form.reset();
+      if (form.elements.date) form.elements.date.value = keepDate;
+      $("fromOtherWrap").hidden = true;
+      setTimeout(() => load(true), 1500); // give Google a moment, then refresh the figures
+    } catch (err) {
+      msg.className = "msg bad"; msg.textContent = err.message;
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
+  });
+}
+
+if (IS_ADMIN) {
+  $("adminTabBtn").hidden = false;
+  try { $("pin").value = sessionStorage.getItem("cricket-admin-pin") || ""; } catch {}
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  document.querySelectorAll('form.admin input[type="date"]').forEach(i => i.value = today);
+  loadLists();
+
+  $("fromSelect").addEventListener("change", e => {
+    const other = e.target.value === "__other";
+    $("fromOtherWrap").hidden = !other;
+    $("fromOther").required = other;
+  });
+
+  $("pinForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const msg = $("pinMsg");
+    try { const r = await adminPost({ action: "check" }); msg.className = "msg ok"; msg.textContent = r.message; }
+    catch (err) { msg.className = "msg bad"; msg.textContent = err.message; }
+  });
+
+  wireForm("incomeForm", f => ({
+    action: "income", date: f.date, type: f.type, amount: f.amount, method: f.method, notes: f.notes,
+    from: f.fromSelect === "__other" ? f.fromOther : f.fromSelect
+  }));
+  wireForm("expenseForm", f => ({ action: "expense", ...f }));
+  wireForm("contribForm", f => ({ action: "contributor", ...f }));
+}
+
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
   $("tab-tournament").hidden = t.dataset.tab !== "tournament";
   $("tab-jersey").hidden = t.dataset.tab !== "jersey";
+  $("tab-admin").hidden = t.dataset.tab !== "admin";
 }));
 $("refresh").addEventListener("click", () => load(true));
 load(false);
