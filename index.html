@@ -87,6 +87,22 @@
   form.admin input:focus, form.admin select:focus { outline: 2px solid var(--gold); border-color: var(--gold); }
   form.admin .actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .msg { font-size: 14px; }
+
+  /* Jersey cards */
+  .jgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; padding: 4px 16px 16px; }
+  .jcard { background: #F8FAF8; border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 10px; text-align: center; }
+  .jcard svg { width: 100%; max-width: 104px; height: auto; display: block; margin: 0 auto; }
+  .jcard .shirt { fill: var(--pitch); }
+  .jcard.kid .shirt { fill: var(--ball); }
+  .jcard .trim { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; }
+  .jcard .jname { fill: #fff; font: 600 9px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .6px; }
+  .jcard .jno { fill: #fff; font: 700 34px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; }
+  .jmeta { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 1px 9px; font-size: 13px; font-weight: 600; }
+  .chip.long { background: var(--part-bg); border-color: #EBCB72; color: var(--part-fg); }
+  .jsub { font-size: 13px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .legend { display: flex; gap: 14px; padding: 0 16px 6px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .msg.ok { color: var(--pitch); } .msg.bad { color: var(--ball); }
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
@@ -222,18 +238,12 @@
 
     <section class="panel">
       <h2>Adults</h2>
-      <div class="scroll"><table>
-        <thead><tr><th>Name</th><th>Size</th><th class="r">No.</th><th>Sleeve</th></tr></thead>
-        <tbody id="adultBody"></tbody>
-      </table></div>
+      <div class="jgrid" id="adultBody"></div>
     </section>
 
     <section class="panel">
       <h2>Kids</h2>
-      <div class="scroll"><table>
-        <thead><tr><th>Name</th><th>Size</th><th class="r">No.</th><th>Parent</th></tr></thead>
-        <tbody id="kidBody"></tbody>
-      </table></div>
+      <div class="jgrid" id="kidBody"></div>
     </section>
   </div>
 
@@ -512,15 +522,36 @@ async function load(force) {
 }
 
 /* ===== Jersey list ===== */
+// "07" → "7", "00" → "0"; anything that isn't a plain number is left as typed.
+const cleanNo = v => /^\d+$/.test(v) ? String(parseInt(v, 10)) : v;
+const SHORT = "M31 8 L43 3 Q50 11 57 3 L69 8 L93 24 L83 39 L74 33 L74 92 L26 92 L26 33 L17 39 L7 24 Z";
+const LONG  = "M31 8 L43 3 Q50 11 57 3 L69 8 L85 20 L97 66 L85 70 L74 36 L74 92 L26 92 L26 36 L15 70 L3 66 L15 20 Z";
+function jerseyCard(p, kid) {
+  const long = /long/i.test(p.sleeve || "");
+  const name = esc(p.name.toUpperCase());
+  const fit = p.name.length > 9 ? ` textLength="40" lengthAdjust="spacingAndGlyphs"` : "";
+  return `<div class="jcard${kid ? " kid" : ""}">
+    <svg viewBox="0 0 100 96" role="img" aria-label="${name}, number ${esc(p.no)}, size ${esc(p.size)}">
+      <path class="shirt" d="${long ? LONG : SHORT}"/>
+      <path class="trim" d="M43 3 Q50 11 57 3"/>
+      <text class="jname" x="50" y="30" text-anchor="middle"${fit}>${name}</text>
+      <text class="jno num" x="50" y="70" text-anchor="middle">${esc(p.no || "–")}</text>
+    </svg>
+    <div class="jmeta"><span class="chip">${esc(p.size || "–")}</span>${long ? `<span class="chip long">Long sleeve</span>` : ""}</div>
+    ${kid && p.parent ? `<div class="jsub">${esc(p.parent)}</div>` : ""}
+  </div>`;
+}
+const byNumber = (a, b) => (parseInt(a.no, 10) || 0) - (parseInt(b.no, 10) || 0) || a.name.localeCompare(b.name);
+
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL"];
 function renderJerseyList(data) {
   const adults = (data.adults || []).map(r => ({
     name: String(pick(r, "name")).trim(), size: String(pick(r, "size")).trim().toUpperCase(),
-    no: String(pick(r, "jerseyno", "no", "number")).trim(), sleeve: String(pick(r, "sleeve")).trim()
+    no: cleanNo(String(pick(r, "jerseyno", "no", "number")).trim()), sleeve: String(pick(r, "sleeve")).trim()
   })).filter(r => r.name);
   const kids = (data.kids || []).map(r => ({
     name: String(pick(r, "kidname", "name")).trim(), size: String(pick(r, "size")).trim().toUpperCase(),
-    no: String(pick(r, "number", "no")).trim(), parent: String(pick(r, "parent")).trim()
+    no: cleanNo(String(pick(r, "number", "no")).trim()), parent: String(pick(r, "parent")).trim()
   })).filter(r => r.name && norm(r.name) !== "total");
 
   $("lAdults").textContent = adults.length;
@@ -537,11 +568,11 @@ function renderJerseyList(data) {
     || `<tr><td colspan="4" class="empty">No jerseys listed yet.</td></tr>`;
 
   $("adultBody").innerHTML = adults.length
-    ? adults.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.size)}</td><td class="r num">${esc(a.no)}</td><td>${esc(a.sleeve)}</td></tr>`).join("")
-    : `<tr><td colspan="4" class="empty">No adult jerseys found. Create the "Adult Roster" tab in the Kids Jersey sheet, with Name, Size, Jersey No and Sleeve in row 1.</td></tr>`;
+    ? [...adults].sort(byNumber).map(a => jerseyCard(a, false)).join("")
+    : `<div class="empty">No adult jerseys found. Create the "Adult Roster" tab in the Kids Jersey sheet, with Name, Size, Jersey No and Sleeve in row 1.</div>`;
   $("kidBody").innerHTML = kids.length
-    ? kids.map(k => `<tr><td>${esc(k.name)}</td><td>${esc(k.size)}</td><td class="r num">${esc(k.no)}</td><td>${esc(k.parent)}</td></tr>`).join("")
-    : `<tr><td colspan="4" class="empty">No kids found. In the "Kids Roster" tab, make sure the headers (#, Kid Name, Size, Number, Parent) are in row 1.</td></tr>`;
+    ? [...kids].sort(byNumber).map(k => jerseyCard(k, true)).join("")
+    : `<div class="empty">No kids found. In the "Kids Roster" tab, make sure the headers (#, Kid Name, Size, Number, Parent) are in row 1.</div>`;
 }
 
 /* ===== Admin ===== */
