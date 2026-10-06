@@ -200,15 +200,8 @@
 const API = {
   income:   "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/income",
   expenses: "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/expenses",
-  parents:  "https://api.sheety.co/1987380af6064ae9ab89446616551159/kidsJerseyTracker/parentPayments"
-};
-
-// Pledged amounts (LKR). Add a line here if someone new pledges.
-const PLEDGES = {
-  "Sajith": 50000, "Kaleel": 25000, "Nufais": 20000, "Safras": 20000,
-  "Azath": 20000, "Shaamil": 15000, "Rikas": 15000, "Hashmath": 10000,
-  "Misfath": 10000, "Ashker": 5000, "Haris": 5000, "Farhan (S)": 5000,
-  "Farhan (J)": 5000, "Rishaf": 5000, "Zamran": 5000, "Hanaam": 5000
+  parents:  "https://api.sheety.co/1987380af6064ae9ab89446616551159/kidsJerseyTracker/parentPayments",
+  contributors: "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/contributors"
 };
 
 // Data is cached on each phone for this long, to save Sheety's monthly request limit.
@@ -216,7 +209,7 @@ const PLEDGES = {
 const CACHE_MINUTES = 10;
 /* ================================= */
 
-const CACHE_KEY = "cricket-accounts-cache-v1";
+const CACHE_KEY = "cricket-accounts-cache-v2";
 const $ = id => document.getElementById(id);
 const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 const fmt = n => Math.round(n).toLocaleString("en-US");
@@ -243,14 +236,14 @@ const badge = s => `<span class="badge s-${s}">${s}</span>`;
 const firstArray = json => Object.values(json || {}).find(Array.isArray) || [];
 
 async function fetchAll() {
-  const [inc, exp, par] = await Promise.all(Object.values(API).map(async url => {
+  const [inc, exp, par, con] = await Promise.all(Object.values(API).map(async url => {
     const r = await fetch(url);
     if (!r.ok) throw new Error(r.status === 402 || r.status === 429
       ? "The Sheety free-plan request limit has been reached for now."
       : `Sheety returned an error (${r.status}).`);
     return firstArray(await r.json());
   }));
-  return { income: inc, expenses: exp, parents: par };
+  return { income: inc, expenses: exp, parents: par, contributors: con };
 }
 
 function render(data, time) {
@@ -274,20 +267,26 @@ function render(data, time) {
     total: num(pick(r, "totalamount", "total")), paid: num(pick(r, "amountpaid", "paid"))
   })).filter(r => r.name && norm(r.name) !== "total");
 
+  // ---- Contributors (pledges come from the Contributors tab) ----
+  const pledges = (data.contributors || []).map(r => ({
+    name: String(pick(r, "contributor", "name")).trim(), pledged: num(pick(r, "pledged"))
+  })).filter(r => r.name && norm(r.name) !== "total");
+
   // Headers not picked up? Sheety is still reading the title rows.
   if ((data.income.length && !data.income.some(r => pick(r, "amount") !== "")) ||
-      (data.parents.length && !parents.length)) {
-    err.innerHTML = "The sheets' column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses and Parent Payments tabs, then click Sync in Sheety and press Refresh.";
+      (data.parents.length && !parents.length) ||
+      ((data.contributors || []).length && !pledges.length)) {
+    err.innerHTML = "The sheets' column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses, Contributors and Parent Payments tabs, then click Sync in Sheety and press Refresh.";
     err.hidden = false;
   }
 
   // ---- Tournament figures ----
   const byName = {};
   income.forEach(r => { byName[norm(r.from)] = (byName[norm(r.from)] || 0) + r.amount; });
-  const pledgeKeys = new Set(Object.keys(PLEDGES).map(norm));
+  const pledgeKeys = new Set(pledges.map(r => norm(r.name)));
 
   let pledged = 0, outstanding = 0, rows = "";
-  for (const [name, p] of Object.entries(PLEDGES)) {
+  for (const { name, pledged: p } of pledges) {
     const got = byName[norm(name)] || 0;
     const owe = Math.max(p - got, 0);
     pledged += p; outstanding += owe;
