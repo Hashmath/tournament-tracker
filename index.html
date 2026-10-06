@@ -197,25 +197,30 @@
 
 <script>
 /* ===== Settings you may edit ===== */
-const API = {
-  income:   "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/income",
-  expenses: "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/expenses",
-  parents:  "https://api.sheety.co/1987380af6064ae9ab89446616551159/kidsJerseyTracker/parentPayments",
-  contributors: "https://api.sheety.co/1987380af6064ae9ab89446616551159/cricketTournamentAccounts/contributors"
+// Paste the ID of each Google Sheet: the long code between /d/ and /edit in its URL.
+const TOURNAMENT_SHEET_ID = "1wtO61912uOAFVdOTvnguDqwzcjkzqt_Vv4un3FZ6pnI";
+const JERSEY_SHEET_ID     = "1vfEOsPVAqKbqfr3GlHU2NtJkcy5DPYG2M91DVbTRT4M";
+
+// Tab names exactly as they appear at the bottom of each Google Sheet.
+const SOURCES = {
+  income:       { id: TOURNAMENT_SHEET_ID, tab: "Income" },
+  expenses:     { id: TOURNAMENT_SHEET_ID, tab: "Expenses" },
+  contributors: { id: TOURNAMENT_SHEET_ID, tab: "Contributors" },
+  parents:      { id: JERSEY_SHEET_ID,     tab: "Parent Payments" }
 };
 
-// Data is cached on each phone for this long, to save Sheety's monthly request limit.
-// The Refresh button always fetches fresh data.
-const CACHE_MINUTES = 10;
+// Reload the data automatically every this many seconds while the page is open.
+const AUTO_REFRESH_SECONDS = 60;
 /* ================================= */
 
-const CACHE_KEY = "cricket-accounts-cache-v2";
+const CACHE_KEY = "cricket-accounts-cache-v3";
+const CACHE_MINUTES = 1;
 const $ = id => document.getElementById(id);
 const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 const fmt = n => Math.round(n).toLocaleString("en-US");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// Find a field by the start of its (normalised) header, so "Amount (LKR)" matches whatever key Sheety generates.
+// Find a field by the start of its (normalised) header, so "Amount (LKR)" matches the column header in the sheet.
 function pick(row, ...prefixes) {
   for (const p of prefixes) {
     for (const k of Object.keys(row)) if (norm(k).startsWith(p)) return row[k];
@@ -235,15 +240,31 @@ function status(paid, owed) {
 const badge = s => `<span class="badge s-${s}">${s}</span>`;
 const firstArray = json => Object.values(json || {}).find(Array.isArray) || [];
 
+// Reads one tab straight from Google Sheets (no API key, no request quota).
+async function fetchTab({ id, tab }) {
+  if (!id || id.startsWith("PASTE_")) throw new Error("The Google Sheet IDs haven't been added to index.html yet.");
+  const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tab)}&_=${Date.now()}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Couldn't read the "${tab}" tab (${r.status}).`);
+  const text = await r.text();
+  const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  if (json.status === "error") throw new Error(`Couldn't read the "${tab}" tab. Check the tab name and that the sheet is shared as "Anyone with the link".`);
+  const labels = json.table.cols.map((c, i) => c.label || c.id || "col" + i);
+  return json.table.rows.map(row => {
+    const o = {};
+    (row.c || []).forEach((cell, i) => {
+      if (!cell) return;
+      // Numbers keep their raw value; dates and text use the sheet's displayed text.
+      o[labels[i]] = typeof cell.v === "number" ? cell.v : (cell.f ?? cell.v ?? "");
+    });
+    return o;
+  });
+}
+
 async function fetchAll() {
-  const [inc, exp, par, con] = await Promise.all(Object.values(API).map(async url => {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(r.status === 402 || r.status === 429
-      ? "The Sheety free-plan request limit has been reached for now."
-      : `Sheety returned an error (${r.status}).`);
-    return firstArray(await r.json());
-  }));
-  return { income: inc, expenses: exp, parents: par, contributors: con };
+  const keys = Object.keys(SOURCES);
+  const results = await Promise.all(keys.map(k => fetchTab(SOURCES[k])));
+  return Object.fromEntries(keys.map((k, i) => [k, results[i]]));
 }
 
 function render(data, time) {
@@ -272,11 +293,11 @@ function render(data, time) {
     name: String(pick(r, "contributor", "name")).trim(), pledged: num(pick(r, "pledged"))
   })).filter(r => r.name && norm(r.name) !== "total");
 
-  // Headers not picked up? Sheety is still reading the title rows.
+  // Headers not picked up? The header row is probably not row 1.
   if ((data.income.length && !data.income.some(r => pick(r, "amount") !== "")) ||
       (data.parents.length && !parents.length) ||
       ((data.contributors || []).length && !pledges.length)) {
-    err.innerHTML = "The sheets' column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses, Contributors and Parent Payments tabs, then click Sync in Sheety and press Refresh.";
+    err.innerHTML = "The column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses, Contributors and Parent Payments tabs, then press Refresh.";
     err.hidden = false;
   }
 
@@ -380,6 +401,8 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 }));
 $("refresh").addEventListener("click", () => load(true));
 load(false);
+setInterval(() => { if (!document.hidden) load(true); }, AUTO_REFRESH_SECONDS * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(false); });
 </script>
 </body>
 </html>
