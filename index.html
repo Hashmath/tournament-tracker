@@ -3,21 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cricket Tournament &amp; Kids Jersey Accounts</title>
+<title>Red Dragon, Batch of 2005</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --pitch: #1E4D2B;
-    --pitch-dark: #143620;
-    --ink: #1B2420;
-    --muted: #5E6B64;
-    --line: #DCE3DD;
-    --bg: #F3F6F2;
+    /* Red Dragon kit colours */
+    --pitch: #7A1424;        /* maroon */
+    --pitch-dark: #4E0D17;   /* deep maroon */
+    --kit-black: #0F0F0F;
+    --ink: #1C1617;
+    --muted: #6B5F60;
+    --line: #E4DCDA;
+    --bg: #F5F2F1;
     --card: #FFFFFF;
     --ball: #B3261E;
-    --gold: #D9A21B;
+    --gold: #E3A93B;
+    --gold-ink: #8A5E00;     /* gold dark enough to read on white */
+    --board-muted: #CDBFA3;
     --paid-bg: #C6EFCE; --paid-fg: #1D5C2B;
     --part-bg: #FFEB9C; --part-fg: #6B5200;
     --pend-bg: #FFC7CE; --pend-fg: #8A1C1C;
@@ -30,20 +34,26 @@
   .num { font-family: "Barlow Condensed", "Arial Narrow", Arial, sans-serif; font-variant-numeric: tabular-nums; }
 
   /* Scoreboard */
-  .board { background: var(--pitch); color: #fff; padding: 22px 20px 0; }
+  .board {
+    color: #fff; padding: 22px 20px 0;
+    border-top: 8px solid var(--pitch); box-shadow: inset 0 2px 0 var(--gold);
+    background-color: var(--kit-black);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='20'%3E%3Cpath d='M0 20a14 14 0 0 1 28 0M-14 10a14 14 0 0 1 28 0M14 10a14 14 0 0 1 28 0' fill='none' stroke='%23262626' stroke-width='1.6'/%3E%3C/svg%3E");
+  }
   .board-inner { max-width: 960px; margin: 0 auto; }
-  .board h1 { font-family: "Barlow Condensed", Arial, sans-serif; font-weight: 600; font-size: 22px; letter-spacing: .3px; }
-  .board .sub { color: #BFD3C4; font-size: 14px; }
+  .board h1 { font-family: "Barlow Condensed", Arial, sans-serif; font-weight: 700; font-size: clamp(30px, 8vw, 42px); line-height: 1; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
+  .board .sub { color: var(--board-muted); font-size: 15px; margin-top: 6px; }
   .score { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 28px; margin: 18px 0 20px; }
   .score .big { font-size: clamp(52px, 13vw, 84px); font-weight: 700; line-height: .9; }
-  .score .big small { font-size: .32em; font-weight: 600; color: #BFD3C4; margin-right: 6px; }
-  .score .label { color: #BFD3C4; font-size: 14px; }
+  .score .big { color: #fff; }
+  .score .big small { font-size: .32em; font-weight: 600; color: var(--board-muted); margin-right: 6px; }
+  .score .label { color: var(--board-muted); font-size: 14px; }
   .score .parts { display: flex; gap: 22px; }
   .score .parts div { font-size: 28px; font-weight: 600; line-height: 1; }
-  .score .parts span { display: block; font-family: "Barlow", Arial, sans-serif; font-size: 13px; color: #BFD3C4; font-weight: 400; margin-top: 4px; }
+  .score .parts span { display: block; font-family: "Barlow", Arial, sans-serif; font-size: 13px; color: var(--board-muted); font-weight: 400; margin-top: 4px; }
 
   .tabs { display: flex; gap: 4px; }
-  .tab { background: transparent; border: 0; color: #CFE0D3; font: 600 15px "Barlow", Arial, sans-serif; padding: 12px 16px; border-radius: 8px 8px 0 0; cursor: pointer; }
+  .tab { background: transparent; border: 0; color: var(--board-muted); font: 600 15px "Barlow", Arial, sans-serif; padding: 12px 16px; border-radius: 8px 8px 0 0; cursor: pointer; }
   .tab[aria-selected="true"] { background: var(--bg); color: var(--pitch-dark); }
   .tab:focus-visible, .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 
@@ -57,11 +67,11 @@
   .stat .k { font-size: 13px; color: var(--muted); }
   .stat .v { font-size: 30px; font-weight: 600; line-height: 1.1; }
   .stat .v.bad { color: var(--ball); }
-  .stat .v.good { color: var(--pitch); }
+  .stat .v.good { color: var(--gold-ink); }
 
   .progress { margin-bottom: 24px; }
   .progress .row { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
-  .track { height: 12px; background: #E3E9E4; border-radius: 6px; overflow: hidden; }
+  .track { height: 12px; background: #EAE2E0; border-radius: 6px; overflow: hidden; }
   .fill { height: 100%; background: var(--gold); width: 0; transition: width .6s ease; }
 
   section.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 20px; }
@@ -69,9 +79,9 @@
   .scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
   th, td { padding: 9px 16px; text-align: left; border-top: 1px solid var(--line); white-space: nowrap; }
-  th { font-weight: 600; font-size: 13px; color: var(--muted); background: #F8FAF8; }
+  th { font-weight: 600; font-size: 13px; color: var(--muted); background: #FAF6F5; }
   td.r, th.r { text-align: right; }
-  tfoot td { font-weight: 600; background: #F8FAF8; }
+  tfoot td { font-weight: 600; background: #FAF6F5; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
   .s-Paid { background: var(--paid-bg); color: var(--paid-fg); }
   .s-Partial { background: var(--part-bg); color: var(--part-fg); }
@@ -90,7 +100,7 @@
 
   /* Jersey cards */
   .jgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; padding: 4px 16px 16px; }
-  .jcard { background: #F8FAF8; border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 10px; text-align: center; }
+  .jcard { background: #FAF6F5; border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px 10px; text-align: center; }
   .jcard svg { width: 100%; max-width: 104px; height: auto; display: block; margin: 0 auto; }
   /* Team kit: black dragon-scale body, maroon yoke and sleeves, gold piping, black-and-gold cuffs, gold lettering */
   .jcard .sleeves { fill: #7A1424; }
@@ -109,7 +119,7 @@
   .jsub { font-size: 13px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .legend { display: flex; gap: 14px; padding: 0 16px 6px; font-size: 13px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-  .msg.ok { color: var(--pitch); } .msg.bad { color: var(--ball); }
+  .msg.ok { color: #1D5C2B; } .msg.bad { color: var(--ball); }
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 </head>
@@ -128,8 +138,8 @@
 
 <header class="board">
   <div class="board-inner">
-    <h1>School Cricket Tournament accounts</h1>
-    <div class="sub">From Friday 9 October 2026 · all amounts in LKR</div>
+    <h1>Red Dragon</h1>
+    <div class="sub">Gintota Zahirians, Batch of 2005. Team fund for the tournament from Friday 9 October 2026, amounts in LKR.</div>
 
     <div class="score">
       <div>
@@ -143,7 +153,7 @@
     </div>
 
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Tournament</button>
+      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Team fund</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey payments</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="list">Jersey list</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
