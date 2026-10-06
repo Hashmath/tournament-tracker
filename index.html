@@ -141,6 +141,10 @@
   .jsub { font-size: 13px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .legend { display: flex; gap: 14px; padding: 0 16px 6px; font-size: 13px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .save-status { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-bottom: 16px; padding: 12px 16px; border-radius: 10px; font-size: 15px; font-weight: 500; border: 1px solid var(--line); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .save-status.busy { border-color: #EBCB72; background: #FFF6DA; color: #5A4300; }
+  .save-status.ok { border-color: #9FD3AC; background: #E6F5E9; color: #1D5C2B; }
+  .save-status.bad { border-color: #EBA3A3; background: #FDE8E8; color: #7A1A1A; }
   .msg.ok { color: #1D5C2B; } .msg.bad { color: var(--ball); }
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
@@ -190,10 +194,10 @@
     </div>
 
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">TEAM FUND</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">KIDS JERSEY PAYMENTS</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="list">JERSEY LIST</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>ADMIN</button>
+      <button class="tab" role="tab" aria-selected="true" data-tab="tournament">Team fund</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="jersey">Kids jersey payments</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="list">Jersey list</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="admin" id="adminTabBtn" hidden>Admin</button>
     </div>
   </div>
 </header>
@@ -313,6 +317,7 @@
 
   <!-- ADMIN (only shown when the page is opened with ?admin) -->
   <div id="tab-admin" hidden>
+    <div class="save-status" id="saveStatus" role="status" aria-live="polite" hidden></div>
     <section class="panel">
       <h2>Admin PIN</h2>
       <form class="admin" id="pinForm">
@@ -711,9 +716,8 @@ async function loadLists() {
 
 // Google sometimes answers with an HTML page instead of JSON even though the entry was saved.
 // Each entry carries a request ID, so retrying is safe: the script returns the saved result instead of adding a second row.
-async function adminPost(payload) {
+async function adminPost(payload, pin) {
   if (!ADMIN_URL || ADMIN_URL.startsWith("PASTE_")) throw new Error("The Apps Script web app URL hasn't been added to index.html yet.");
-  const pin = $("pin").value;
   if (!pin) throw new Error("Enter the admin PIN first.");
   const requestId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + "-" + Math.random().toString(36).slice(2));
   const body = JSON.stringify({ ...payload, pin, requestId });
@@ -732,34 +736,52 @@ async function adminPost(payload) {
       try { sessionStorage.setItem("cricket-admin-pin", pin); } catch {}
       return res;
     }
-    if (attempt < 3) await new Promise(ok => setTimeout(ok, 1500 * attempt));
+    if (attempt < 3) await new Promise(ok => setTimeout(ok, 1000 * attempt));
   }
-  const e = new Error("Google didn't confirm the save. It may have gone through, so check the dashboard after it refreshes before adding it again.");
+  const e = new Error("Google didn't confirm the save. It may have gone through, so check the dashboard before adding it again.");
   e.uncertain = true;
   throw e;
 }
 
-function wireForm(id, build) {
-  const form = $(id);
-  form.addEventListener("submit", async e => {
-    e.preventDefault();
-    const btn = form.querySelector("button"), msg = form.querySelector(".msg");
-    const label = btn.textContent;
-    btn.disabled = true; btn.textContent = "Saving…"; msg.className = "msg"; msg.textContent = "";
+/* Saves run in the background, one after another, so the form is ready for the next entry straight away. */
+let saveQueue = Promise.resolve();
+let pendingSaves = 0;
+function showSaveStatus(text, kind) {
+  const box = $("saveStatus");
+  box.hidden = false;
+  box.className = "save-status " + (kind || "");
+  box.textContent = text;
+}
+function queueSave(payload, summary) {
+  const pin = $("pin").value;
+  pendingSaves++;
+  showSaveStatus(`Saving ${pendingSaves === 1 ? summary : pendingSaves + " entries"}…`, "busy");
+  saveQueue = saveQueue.then(async () => {
     try {
-      const res = await adminPost(build(Object.fromEntries(new FormData(form))));
-      msg.className = "msg ok"; msg.textContent = res.message;
-      const keepDate = form.elements.date && form.elements.date.value;
-      form.reset();
-      if (form.elements.date) form.elements.date.value = keepDate;
-      $("fromOtherWrap").hidden = true;
-      setTimeout(() => load(true), 1500); // give Google a moment, then refresh the figures
+      const res = await adminPost(payload, pin);
+      pendingSaves--;
+      showSaveStatus(pendingSaves ? `Saved: ${res.message}. ${pendingSaves} more saving…` : `Saved: ${res.message}`, pendingSaves ? "busy" : "ok");
     } catch (err) {
-      msg.className = "msg bad"; msg.textContent = err.message;
-      if (err.uncertain) setTimeout(() => load(true), 1500);
-    } finally {
-      btn.disabled = false; btn.textContent = label;
+      pendingSaves--;
+      showSaveStatus(`Not saved: ${summary}. ${err.message}`, "bad");
     }
+    if (!pendingSaves) setTimeout(() => load(true), 600); // refresh the figures once everything is in
+  });
+}
+
+function wireForm(id, build, describe) {
+  const form = $(id);
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!$("pin").value) { showSaveStatus("Enter the admin PIN at the top first.", "bad"); $("pin").focus(); return; }
+    const f = Object.fromEntries(new FormData(form));
+    const payload = build(f);
+    queueSave(payload, describe(payload));
+    // Clear the form at once, keeping the date, so the next entry can be typed while this one saves.
+    const keepDate = form.elements.date && form.elements.date.value;
+    form.reset();
+    if (form.elements.date) form.elements.date.value = keepDate;
+    $("fromOtherWrap").hidden = true;
   });
 }
 
@@ -779,17 +801,19 @@ if (IS_ADMIN) {
   $("pinForm").addEventListener("submit", async e => {
     e.preventDefault();
     const msg = $("pinMsg");
-    try { const r = await adminPost({ action: "check" }); msg.className = "msg ok"; msg.textContent = r.message; }
+    msg.className = "msg"; msg.textContent = "Checking…";
+    try { const r = await adminPost({ action: "check" }, $("pin").value); msg.className = "msg ok"; msg.textContent = r.message; }
     catch (err) { msg.className = "msg bad"; msg.textContent = err.message; }
   });
 
+  const lkr = a => "LKR " + fmt(num(a));
   wireForm("incomeForm", f => ({
     action: "income", date: f.date, type: f.type, amount: f.amount, method: f.method, notes: f.notes,
     from: f.fromSelect === "__other" ? f.fromOther : f.fromSelect
-  }));
-  wireForm("expenseForm", f => ({ action: "expense", ...f }));
-  wireForm("contribForm", f => ({ action: "contributor", ...f }));
-  wireForm("jerseyForm", f => ({ action: "jersey", ...f }));
+  }), p => `income from ${titleCase(p.from)}, ${lkr(p.amount)}`);
+  wireForm("expenseForm", f => ({ action: "expense", ...f }), p => `expense "${p.description}", ${lkr(p.amount)}`);
+  wireForm("contribForm", f => ({ action: "contributor", ...f }), p => `contributor ${titleCase(p.name)}`);
+  wireForm("jerseyForm", f => ({ action: "jersey", ...f }), p => `jersey payment from ${titleCase(p.parent)}, ${lkr(p.amount)}`);
 }
 
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
