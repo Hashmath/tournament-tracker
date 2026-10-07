@@ -334,7 +334,7 @@
         <label>Received from
           <select name="fromSelect" id="fromSelect" required></select>
         </label>
-        <label id="fromOtherWrap" hidden>Name (sponsor or donor)<input name="fromOther" id="fromOther"></label>
+        <label id="fromOtherWrap" hidden>Name (added to Contributors too)<input name="fromOther" id="fromOther"></label>
         <label>Type<select name="type" id="typeSelect"></select></label>
         <label>Amount (LKR)<input type="number" name="amount" min="1" step="any" inputmode="decimal" required></label>
         <label>Method<select name="method" id="methodSelect"></select></label>
@@ -348,6 +348,7 @@
       <form class="admin" id="expenseForm">
         <label>Date<input type="date" name="date" required></label>
         <label>Category<select name="category" id="catSelect" required></select></label>
+        <label id="catOtherWrap" hidden>New category<input name="catOther" id="catOther"></label>
         <label>Description<input name="description" required></label>
         <label>Paid to<input name="paidTo"></label>
         <label>Amount (LKR)<input type="number" name="amount" min="1" step="any" inputmode="decimal" required></label>
@@ -709,7 +710,8 @@ async function loadLists() {
       methods: col("paymentmethod").length ? col("paymentmethod") : DEFAULT_LISTS.methods
     };
   } catch {}
-  $("catSelect").innerHTML = opts(lists.categories);
+  const keepCat = $("catSelect").value;
+  $("catSelect").innerHTML = opts(lists.categories, keepCat) + `<option value="__new">Add new category…</option>`;
   $("typeSelect").innerHTML = opts(lists.types);
   $("methodSelect").innerHTML = opts(lists.methods);
   $("jMethodSelect").innerHTML = opts(lists.methods);
@@ -765,7 +767,7 @@ function queueSave(payload, summary) {
       pendingSaves--;
       showSaveStatus(`Not saved: ${summary}. ${err.message}`, "bad");
     }
-    if (!pendingSaves) setTimeout(() => load(true), 600); // refresh the figures once everything is in
+    if (!pendingSaves) setTimeout(() => { load(true); loadLists(); }, 600); // refresh figures and dropdowns once everything is in
   });
 }
 
@@ -781,7 +783,8 @@ function wireForm(id, build, describe) {
     const keepDate = form.elements.date && form.elements.date.value;
     form.reset();
     if (form.elements.date) form.elements.date.value = keepDate;
-    $("fromOtherWrap").hidden = true;
+    $("fromOtherWrap").hidden = true; $("fromOther").required = false;
+    $("catOtherWrap").hidden = true; $("catOther").required = false;
   });
 }
 
@@ -793,6 +796,13 @@ if (IS_ADMIN) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   document.querySelectorAll('form.admin input[type="date"]').forEach(i => i.value = today);
   loadLists();
+
+  $("catSelect").addEventListener("change", e => {
+    const other = e.target.value === "__new";
+    $("catOtherWrap").hidden = !other;
+    $("catOther").required = other;
+    if (other) $("catOther").focus();
+  });
 
   $("fromSelect").addEventListener("change", e => {
     const other = e.target.value === "__other";
@@ -813,7 +823,10 @@ if (IS_ADMIN) {
     action: "income", date: f.date, type: f.type, amount: f.amount, method: f.method, notes: f.notes,
     from: f.fromSelect === "__other" ? f.fromOther : f.fromSelect
   }), p => `income from ${titleCase(p.from)}, ${lkr(p.amount)}`);
-  wireForm("expenseForm", f => ({ action: "expense", ...f }), p => `expense "${p.description}", ${lkr(p.amount)}`);
+  wireForm("expenseForm", f => ({
+    action: "expense", date: f.date, description: f.description, paidTo: f.paidTo, amount: f.amount, paidBy: f.paidBy, notes: f.notes,
+    category: f.category === "__new" ? f.catOther.trim() : f.category
+  }), p => `expense "${p.description}", ${lkr(p.amount)}`);
   wireForm("contribForm", f => ({ action: "contributor", ...f }), p => `contributor ${titleCase(p.name)}`);
   wireForm("jerseyForm", f => ({ action: "jersey", ...f }), p => `jersey payment from ${titleCase(p.parent)}, ${lkr(p.amount)}`);
 }
