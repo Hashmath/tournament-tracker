@@ -233,7 +233,7 @@
     </section>
 
     <section class="panel" id="otherPanel" hidden>
-      <h2>Other income (sponsors, donations)</h2>
+      <h2>Sponsorships and donations</h2>
       <div class="scroll"><table>
         <thead><tr><th>Date</th><th>From</th><th>Type</th><th class="r">Amount</th></tr></thead>
         <tbody id="otherBody"></tbody>
@@ -531,7 +531,8 @@ function render(data, time) {
   const contribReceived = pledged - outstanding;
   $("contribBody").innerHTML = rows;
 
-  const other = income.filter(r => !pledgeKeys.has(norm(r.from)));
+  // Only income recorded with a Sponsorship or Donation type; the section stays hidden when there is none.
+  const other = income.filter(r => /sponsor|donat/i.test(r.type));
   $("otherPanel").hidden = !other.length;
   $("otherBody").innerHTML = other.map(r =>
     `<tr><td>${esc(r.date)}</td><td>${esc(titleCase(r.from))}</td><td>${esc(r.type)}</td><td class="r num">${fmt(r.amount)}</td></tr>`).join("");
