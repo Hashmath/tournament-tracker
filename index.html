@@ -159,7 +159,7 @@
   .stot small { font-size: 12px; color: var(--muted); }
   .snote { grid-column: 2 / 4; margin-top: -4px; font-size: 13px; color: var(--part-fg); }
   .sizes .total-row { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 2px; }
-  .sizes .total-row .stag { background: var(--pitch); color: #fff; font-size: 15px; }
+  .sizes .total-row .stag { background: var(--pitch); color: #fff; font-size: 13px; }
   @media (prefers-reduced-motion: reduce) { .sbar span { transition: none; } }
   .filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 12px; }
   .chipbtn { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font: 500 13px "Barlow", Arial, sans-serif; cursor: pointer; color: var(--ink); }
@@ -356,16 +356,17 @@
 
     <section class="panel">
       <h2>Sizes</h2>
+      <div class="filters" id="jFilters" role="group" aria-label="Filter jerseys"></div>
       <div class="size-legend"><span><i class="sw-a"></i>Adults</span><span><i class="sw-k"></i>Kids</span></div>
       <div class="sizes" id="sizeBody"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="adultPanel">
       <h2>Adults</h2>
       <div class="jgrid" id="adultBody"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="kidPanel">
       <h2>Kids</h2>
       <div class="jgrid" id="kidBody"></div>
     </section>
@@ -771,6 +772,36 @@ function renderJerseyList(data) {
   $("lTotal").textContent = adults.length + kids.length;
   $("lLong").textContent = adults.filter(a => /long/i.test(a.sleeve)).length;
 
+  lastJerseys = { adults, kids };
+  drawJerseys();
+}
+
+/* Filter buttons for the size chart and jersey cards. Kids' jerseys are all short sleeve. */
+const isLong = p => /long/i.test(p.sleeve || "");
+const J_FILTERS = [
+  { key: "all",   label: "All",          a: () => true,     k: true },
+  { key: "adult", label: "Adults",       a: () => true,     k: false },
+  { key: "kid",   label: "Kids",         a: () => false,    k: true },
+  { key: "long",  label: "Long sleeve",  a: isLong,         k: false },
+  { key: "short", label: "Short sleeve", a: p => !isLong(p), k: true }
+];
+let jFilter = "all";
+let lastJerseys = { adults: [], kids: [] };
+
+function drawJerseys() {
+  const { adults: allAdults, kids: allKids } = lastJerseys;
+  const f = J_FILTERS.find(x => x.key === jFilter) || J_FILTERS[0];
+  const adults = allAdults.filter(f.a);
+  const kids = f.k ? allKids : [];
+
+  $("jFilters").innerHTML = J_FILTERS.map(x => {
+    const n = allAdults.filter(x.a).length + (x.k ? allKids.length : 0);
+    return `<button class="chipbtn" data-f="${x.key}" aria-pressed="${x.key === f.key}">${x.label} <span class="num" style="opacity:.7">${n}</span></button>`;
+  }).join("");
+  // Show only the card sections the filter includes.
+  $("adultPanel").hidden = !allAdults.length ? false : !adults.length;
+  $("kidPanel").hidden = !allKids.length ? false : !kids.length;
+
   const sizes = {};
   adults.forEach(a => { (sizes[a.size] ||= { a: 0, k: 0 }).a++; });
   kids.forEach(k => { (sizes[k.size] ||= { a: 0, k: 0 }).k++; });
@@ -786,23 +817,28 @@ function renderJerseyList(data) {
           <div class="stag">${esc(sz || "–")}</div>
           <div class="sbar" role="img" aria-label="Size ${esc(sz)}: ${a} adults, ${k} kids">${seg(a, "a", "adults")}${seg(k, "k", "kids")}</div>
           <div class="stot"><b class="num">${a + k}</b><small>${a + k === 1 ? "jersey" : "jerseys"}</small></div>
-          ${long ? `<div class="snote">Includes ${long} long sleeve</div>` : ""}
+          ${long && jFilter !== "long" ? `<div class="snote">Includes ${long} long sleeve</div>` : ""}
         </div>`;
       }).join("") +
       `<div class="srow total-row">
-        <div class="stag">ALL</div>
+        <div class="stag">TOTAL</div>
         <div class="sbar" style="background:none"><span class="a" style="width:${adults.length / Math.max(adults.length + kids.length, 1) * 100}%">${adults.length || ""}</span><span class="k" style="width:${kids.length / Math.max(adults.length + kids.length, 1) * 100}%">${kids.length || ""}</span></div>
         <div class="stot"><b class="num">${adults.length + kids.length}</b><small>total</small></div>
       </div>`
     : `<div class="empty">No jerseys listed yet.</div>`;
 
-  $("adultBody").innerHTML = adults.length
+  $("adultBody").innerHTML = allAdults.length && !adults.length ? "" : adults.length
     ? [...adults].sort(byNumber).map(a => jerseyCard(a, false)).join("")
     : `<div class="empty">No adult jerseys found. Create the "Adult Roster" tab in the Kids Jersey sheet, with Name, Size, Jersey No and Sleeve in row 1.</div>`;
-  $("kidBody").innerHTML = kids.length
+  $("kidBody").innerHTML = allKids.length && !kids.length ? "" : kids.length
     ? [...kids].sort(byNumber).map(k => jerseyCard(k, true)).join("")
     : `<div class="empty">No kids found. In the "Kids Roster" tab, make sure the headers (#, Kid Name, Size, Number, Parent) are in row 1.</div>`;
 }
+
+$("jFilters").addEventListener("click", e => {
+  const b = e.target.closest(".chipbtn"); if (!b) return;
+  jFilter = b.dataset.f; drawJerseys();
+});
 
 /* ===== Admin ===== */
 const IS_ADMIN = /[?&#]admin\b/.test(location.search + location.hash);
