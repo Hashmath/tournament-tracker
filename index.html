@@ -65,7 +65,8 @@
   .foot .logo { width: 120px; margin: 0 auto 10px; display: block; }
   .foot .line1 { color: #fff; font: 600 18px "Barlow Condensed", Arial, sans-serif; letter-spacing: .5px; }
   .foot .line2 { font-size: 14px; margin-top: 4px; }
-  .foot .thanks { margin: 12px auto 0; max-width: 420px; color: var(--gold); font: italic 500 15px "Barlow", Arial, sans-serif; }
+  /* Kept on one line: the text shrinks a little on narrow phones instead of wrapping */
+  .foot .thanks { margin: 12px auto 0; color: var(--gold); font: italic 500 15px "Barlow", Arial, sans-serif; white-space: nowrap; font-size: min(15px, calc((100vw - 32px) / 31)); }
   .foot .thanks::before { content: ""; display: block; width: 48px; height: 2px; margin: 0 auto 12px; background: linear-gradient(90deg, var(--pitch), var(--gold), var(--pitch)); }
   .foot .line3 { font-size: 13px; margin-top: 14px; color: #8F8576; }
   .board .sub { color: var(--board-muted); font-size: 15px; margin-top: 6px; }
