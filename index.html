@@ -119,6 +119,48 @@
   .notice { background: #FFF4D6; border: 1px solid #EBCB72; color: #5A4300; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 15px; }
   .notice.err { background: #FDE8E8; border-color: #EBA3A3; color: #7A1A1A; }
   [hidden] { display: none !important; }
+
+  /* Spending by category: an overall mix bar, then one row per category */
+  .spend { padding: 2px 16px 16px; }
+  .mix { display: flex; height: 20px; border-radius: 10px; overflow: hidden; background: #EFE8E6; margin-bottom: 6px; }
+  .mix span { height: 100%; transition: width .6s ease; }
+  .mix span + span { box-shadow: inset 2px 0 0 #fff; }
+  .mix-cap { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .mix-cap b { color: var(--ink); font-weight: 600; }
+  .crow { padding: 11px 0; border-top: 1px solid var(--line); }
+  .crow .top { display: flex; align-items: center; gap: 10px; }
+  .crow .dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .crow .namebox { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .crow .name { font-weight: 600; font-size: 15px; }
+  .crow .cnt { font-size: 13px; color: var(--muted); }
+  .crow .amt { margin-left: auto; font: 700 20px "Barlow Condensed", Arial, sans-serif; white-space: nowrap; }
+  .crow .pct { min-width: 46px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .crow .line { height: 6px; border-radius: 3px; background: #EFE8E6; margin: 7px 0 0 22px; overflow: hidden; }
+  .crow .line i { display: block; height: 100%; border-radius: 3px; transition: width .6s ease; }
+  @media (prefers-reduced-motion: reduce) { .mix span, .crow .line i { transition: none; } }
+
+  /* Size chart: a label tag per size, a stacked adults/kids bar, and the total */
+  .size-legend { display: flex; gap: 16px; padding: 0 16px 10px; font-size: 14px; color: var(--muted); }
+  .size-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .sw-a { background: var(--pitch); }
+  .sw-k { background: linear-gradient(90deg, #F0B54A, #E3A93B); }
+  .sizes { padding: 4px 16px 16px; display: grid; gap: 10px; }
+  .srow { display: grid; grid-template-columns: 66px 1fr 54px; align-items: center; gap: 12px; }
+  .stag { position: relative; text-align: center; padding: 7px 0 7px 12px; border-radius: 4px 8px 8px 4px;
+          background: var(--kit-black); color: var(--gold); font: 700 18px "Barlow Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .5px;
+          clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%); }
+  .stag::before { content: ""; position: absolute; left: 8px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--bg); }
+  .sbar { display: flex; height: 30px; border-radius: 8px; overflow: hidden; background: #EFE8E6; }
+  .sbar span { display: flex; align-items: center; justify-content: center; min-width: 0; font: 700 14px "Barlow Condensed", Arial, sans-serif; transition: width .6s ease; }
+  .sbar .a { background: var(--pitch); color: #fff; }
+  .sbar .k { background: linear-gradient(90deg, #F0B54A, #E3A93B); color: #3A2600; }
+  .stot { text-align: right; line-height: 1; }
+  .stot b { display: block; font: 700 26px "Barlow Condensed", Arial, sans-serif; color: var(--ink); }
+  .stot small { font-size: 12px; color: var(--muted); }
+  .snote { grid-column: 2 / 4; margin-top: -4px; font-size: 13px; color: var(--part-fg); }
+  .sizes .total-row { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 2px; }
+  .sizes .total-row .stag { background: var(--pitch); color: #fff; font-size: 15px; }
+  @media (prefers-reduced-motion: reduce) { .sbar span { transition: none; } }
   .filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 12px; }
   .chipbtn { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font: 500 13px "Barlow", Arial, sans-serif; cursor: pointer; color: var(--ink); }
   .chipbtn[aria-pressed="true"] { background: var(--pitch); color: #fff; border-color: var(--pitch); }
@@ -250,10 +292,7 @@
 
     <section class="panel">
       <h2>Spending by category</h2>
-      <div class="scroll"><table>
-        <thead><tr><th>Category</th><th class="r">Amount</th></tr></thead>
-        <tbody id="catBody"></tbody>
-      </table></div>
+      <div class="spend" id="catBody"></div>
     </section>
 
     <section class="panel">
@@ -317,10 +356,8 @@
 
     <section class="panel">
       <h2>Sizes</h2>
-      <div class="scroll"><table>
-        <thead><tr><th>Size</th><th class="r">Adults</th><th class="r">Kids</th><th class="r">Total</th></tr></thead>
-        <tbody id="sizeBody"></tbody>
-      </table></div>
+      <div class="size-legend"><span><i class="sw-a"></i>Adults</span><span><i class="sw-k"></i>Kids</span></div>
+      <div class="sizes" id="sizeBody"></div>
     </section>
 
     <section class="panel">
@@ -571,10 +608,22 @@ function render(data, time) {
   $("tFill").style.width = Math.min(pct, 100) + "%";
 
   const cats = {};
-  expenses.forEach(r => { cats[r.cat] = (cats[r.cat] || 0) + r.amount; });
-  $("catBody").innerHTML = Object.keys(cats).length
-    ? Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, a]) => `<tr><td>${esc(c)}</td><td class="r num">${fmt(a)}</td></tr>`).join("")
-    : `<tr><td colspan="2" class="empty">No expenses recorded yet.</td></tr>`;
+  expenses.forEach(r => { (cats[r.cat] ||= { amt: 0, n: 0 }); cats[r.cat].amt += r.amount; cats[r.cat].n++; });
+  const PALETTE = ["#7A1424", "#E3A93B", "#B3261E", "#3A3A3A", "#F2A33A", "#5C2A1E", "#A8743A", "#8C8076"];
+  const catList = Object.entries(cats).sort((a, b) => b[1].amt - a[1].amt);
+  const share = a => spent ? a / spent * 100 : 0;
+  const pctTxt = a => { const p = share(a); return p > 0 && p < 1 ? "<1%" : Math.round(p) + "%"; };
+  $("catBody").innerHTML = catList.length
+    ? `<div class="mix" role="img" aria-label="Share of spending by category">${catList.map(([c, v], i) =>
+          `<span style="width:${share(v.amt)}%;background:${PALETTE[i % PALETTE.length]}" title="${esc(c)}: LKR ${fmt(v.amt)}"></span>`).join("")}</div>
+       <div class="mix-cap"><span>Total spent <b class="num">LKR ${fmt(spent)}</b></span>${received ? `<span><b class="num">${Math.round(spent / received * 100)}%</b> of money received</span>` : ""}</div>` +
+      catList.map(([c, v], i) => `<div class="crow">
+          <div class="top"><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span>
+            <span class="namebox"><span class="name">${esc(c)}</span><span class="cnt">${v.n} item${v.n === 1 ? "" : "s"}</span></span>
+            <span class="amt num">${fmt(v.amt)}</span><span class="pct">${pctTxt(v.amt)}</span></div>
+          <div class="line"><i style="width:${share(v.amt)}%;background:${PALETTE[i % PALETTE.length]}"></i></div>
+        </div>`).join("")
+    : `<div class="empty">No expenses recorded yet.</div>`;
 
   $("expBody").innerHTML = expenses.length
     ? expenses.map(r => `<tr><td>${esc(r.date)}</td><td>${esc(r.cat)}</td><td>${esc(r.desc)}</td><td>${esc(titleCase(r.by))}</td><td class="r num">${fmt(r.amount)}</td></tr>`).join("")
@@ -726,9 +775,26 @@ function renderJerseyList(data) {
   adults.forEach(a => { (sizes[a.size] ||= { a: 0, k: 0 }).a++; });
   kids.forEach(k => { (sizes[k.size] ||= { a: 0, k: 0 }).k++; });
   const rank = sz => { const i = SIZE_ORDER.indexOf(sz); return i < 0 ? 99 : i; };
-  $("sizeBody").innerHTML = Object.keys(sizes).sort((x, y) => rank(x) - rank(y)).map(sz =>
-    `<tr><td>${esc(sz || "–")}</td><td class="r num">${sizes[sz].a}</td><td class="r num">${sizes[sz].k}</td><td class="r num">${sizes[sz].a + sizes[sz].k}</td></tr>`).join("")
-    || `<tr><td colspan="4" class="empty">No jerseys listed yet.</td></tr>`;
+  adults.forEach(a => { if (/long/i.test(a.sleeve)) sizes[a.size].long = (sizes[a.size].long || 0) + 1; });
+  const order = Object.keys(sizes).sort((x, y) => rank(x) - rank(y));
+  const most = Math.max(1, ...order.map(sz => sizes[sz].a + sizes[sz].k));
+  const seg = (n, cls, label) => n ? `<span class="${cls}" style="width:${n / most * 100}%" title="${n} ${label}">${n}</span>` : "";
+  $("sizeBody").innerHTML = order.length
+    ? order.map(sz => {
+        const { a, k, long } = sizes[sz];
+        return `<div class="srow">
+          <div class="stag">${esc(sz || "–")}</div>
+          <div class="sbar" role="img" aria-label="Size ${esc(sz)}: ${a} adults, ${k} kids">${seg(a, "a", "adults")}${seg(k, "k", "kids")}</div>
+          <div class="stot"><b class="num">${a + k}</b><small>${a + k === 1 ? "jersey" : "jerseys"}</small></div>
+          ${long ? `<div class="snote">Includes ${long} long sleeve</div>` : ""}
+        </div>`;
+      }).join("") +
+      `<div class="srow total-row">
+        <div class="stag">ALL</div>
+        <div class="sbar" style="background:none"><span class="a" style="width:${adults.length / Math.max(adults.length + kids.length, 1) * 100}%">${adults.length || ""}</span><span class="k" style="width:${kids.length / Math.max(adults.length + kids.length, 1) * 100}%">${kids.length || ""}</span></div>
+        <div class="stot"><b class="num">${adults.length + kids.length}</b><small>total</small></div>
+      </div>`
+    : `<div class="empty">No jerseys listed yet.</div>`;
 
   $("adultBody").innerHTML = adults.length
     ? [...adults].sort(byNumber).map(a => jerseyCard(a, false)).join("")
