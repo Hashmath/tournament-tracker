@@ -79,7 +79,7 @@
   .tab[aria-selected="true"] { background: var(--bg); color: var(--pitch-dark); }
   .tab:focus-visible, .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 
-  main { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
+  main { max-width: 960px; margin: 0 auto; padding: 22px 16px 40px; }
   .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--muted); font-size: 14px; }
   .btn { background: var(--pitch); color: #fff; border: 0; border-radius: 6px; padding: 9px 16px; font: 600 14px "Barlow", Arial, sans-serif; cursor: pointer; }
   .btn:disabled { opacity: .6; cursor: wait; }
@@ -113,6 +113,11 @@
   .notice { background: #FFF4D6; border: 1px solid #EBCB72; color: #5A4300; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 15px; }
   .notice.err { background: #FDE8E8; border-color: #EBA3A3; color: #7A1A1A; }
   [hidden] { display: none !important; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 12px; }
+  .chipbtn { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font: 500 13px "Barlow", Arial, sans-serif; cursor: pointer; color: var(--ink); }
+  .chipbtn[aria-pressed="true"] { background: var(--pitch); color: #fff; border-color: var(--pitch); }
+  .chipbtn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  td.muted { color: var(--muted); font-style: italic; }
   form.admin { padding: 4px 16px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
   form.admin label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 500; color: var(--muted); }
   form.admin input, form.admin select { font: 16px "Barlow", Arial, sans-serif; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
@@ -204,10 +209,6 @@
 </header>
 
 <main>
-  <div class="bar">
-    <span id="updated">Loading…</span>
-    <button class="btn" id="refresh">Refresh</button>
-  </div>
   <div class="notice err" id="error" hidden></div>
 
   <!-- TOURNAMENT -->
@@ -282,8 +283,18 @@
     <section class="panel">
       <h2>Parents</h2>
       <div class="scroll"><table>
-        <thead><tr><th>Parent</th><th class="r">Kids</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Outstanding</th><th>Status</th></tr></thead>
+        <thead><tr><th>Parent</th><th class="r">Kids</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Outstanding</th><th>Status</th><th>Last paid</th></tr></thead>
         <tbody id="parentBody"></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Payment history</h2>
+      <div class="filters" id="logFilters"></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Date</th><th>Parent</th><th class="r">Amount</th><th>Method</th><th>Notes</th></tr></thead>
+        <tbody id="logBody"></tbody>
+        <tfoot id="logFoot"></tfoot>
       </table></div>
     </section>
   </div>
@@ -411,7 +422,8 @@ const SOURCES = {
   contributors: { id: TOURNAMENT_SHEET_ID, tab: "Contributors" },
   parents:      { id: JERSEY_SHEET_ID,     tab: "Parent Payments" },
   kids:         { id: JERSEY_SHEET_ID,     tab: "Kids Roster",  optional: true },
-  adults:       { id: JERSEY_SHEET_ID,     tab: "Adult Roster", optional: true }
+  adults:       { id: JERSEY_SHEET_ID,     tab: "Adult Roster", optional: true },
+  jerseyLog:    { id: JERSEY_SHEET_ID,     tab: "Jersey Payment Log", optional: true } // filled by the Admin tab
 };
 
 // Web app URL from Apps Script (Deploy → Manage deployments). Used only by the Admin tab.
@@ -511,7 +523,7 @@ function render(data, time) {
   if ((data.income.length && !data.income.some(r => pick(r, "amount") !== "")) ||
       (data.parents.length && !parents.length) ||
       ((data.contributors || []).length && !pledges.length)) {
-    err.innerHTML = "The column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses, Contributors and Parent Payments tabs, then press Refresh.";
+    err.innerHTML = "The column headers weren't found. In Google Sheets, make sure the headers (Date, Received From, Amount…) are in row 1 of the Income, Expenses, Contributors and Parent Payments tabs.";
     err.hidden = false;
   }
 
@@ -566,11 +578,17 @@ function render(data, time) {
     : `<tr><td colspan="5" class="empty">No income recorded yet.</td></tr>`;
 
   // ---- Jersey figures ----
+  const log = shapeJerseyLog(data.jerseyLog || []);
+  const lastPaid = {};
+  log.forEach(l => { const k = norm(l.parent); if (!lastPaid[k] || l.t > lastPaid[k].t) lastPaid[k] = l; });
+
   let kids = 0, cost = 0, paid = 0;
   $("parentBody").innerHTML = parents.map(p => {
     kids += p.kids; cost += p.total; paid += p.paid;
-    return `<tr><td>${esc(titleCase(p.name))}</td><td class="r num">${fmt(p.kids)}</td><td class="r num">${fmt(p.total)}</td><td class="r num">${fmt(p.paid)}</td><td class="r num">${fmt(Math.max(p.total - p.paid, 0))}</td><td>${badge(status(p.paid, p.total))}</td></tr>`;
+    const lp = lastPaid[norm(p.name)];
+    return `<tr><td>${esc(titleCase(p.name))}</td><td class="r num">${fmt(p.kids)}</td><td class="r num">${fmt(p.total)}</td><td class="r num">${fmt(p.paid)}</td><td class="r num">${fmt(Math.max(p.total - p.paid, 0))}</td><td>${badge(status(p.paid, p.total))}</td><td>${lp ? esc(lp.date) : "–"}</td></tr>`;
   }).join("");
+  renderJerseyLog(log, parents);
   fillParentSelect(parents.map(p => p.name));
   renderJerseyList(data);
   const jpct = cost ? paid / cost * 100 : 0;
@@ -581,7 +599,6 @@ function render(data, time) {
   $("jPct").textContent = jpct.toFixed(1) + "%";
   $("jFill").style.width = Math.min(jpct, 100) + "%";
 
-  $("updated").textContent = "Data as of " + new Date(time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function readCache() {
@@ -596,21 +613,56 @@ async function load(force) {
   if (cached) render(cached.data, cached.time);
   if (!force && cached && Date.now() - cached.time < CACHE_MINUTES * 60000) return;
 
-  const btn = $("refresh");
-  btn.disabled = true; btn.textContent = "Refreshing…";
   try {
     const data = await fetchAll();
     writeCache(data);
     render(data, Date.now());
   } catch (e) {
     const err = $("error");
-    err.textContent = (e.message || "Couldn't load the data.") + (cached ? " Showing the last saved figures." : " Check your connection and press Refresh.");
+    err.textContent = (e.message || "Couldn't load the data.") + (cached ? " Showing the last saved figures; trying again shortly." : " Trying again shortly.");
     err.hidden = false;
-    if (!cached) $("updated").textContent = "No data loaded";
-  } finally {
-    btn.disabled = false; btn.textContent = "Refresh";
   }
 }
+
+/* ===== Jersey payment history ===== */
+function shapeJerseyLog(rows) {
+  const when = d => { const t = Date.parse(String(d).replace(/-/g, " ")); return isNaN(t) ? 0 : t; };
+  return rows.map(r => ({
+    date: pick(r, "date"), parent: String(pick(r, "parent")).trim(), amount: num(pick(r, "amount")),
+    method: pick(r, "method"), notes: pick(r, "notes")
+  })).filter(r => r.parent && r.amount > 0)
+    .map(r => ({ ...r, t: when(r.date) }))
+    .sort((a, b) => b.t - a.t);
+}
+
+let logFilter = "", lastLog = [], lastParents = [];
+function renderJerseyLog(log, parents) {
+  lastLog = log; lastParents = parents;
+  const names = [...new Set(log.map(l => l.parent))].sort((a, b) => a.localeCompare(b));
+  if (logFilter && !names.some(n => norm(n) === logFilter)) logFilter = "";
+  $("logFilters").innerHTML = names.length > 1
+    ? [`<button class="chipbtn" data-p="" aria-pressed="${!logFilter}">All</button>`,
+       ...names.map(n => `<button class="chipbtn" data-p="${esc(norm(n))}" aria-pressed="${norm(n) === logFilter}">${esc(titleCase(n))}</button>`)].join("")
+    : "";
+
+  const list = logFilter ? log.filter(l => norm(l.parent) === logFilter) : log;
+  const logged = list.reduce((a, l) => a + l.amount, 0);
+
+  // Payments entered straight into "Amount Paid" (before the log existed) have no date; show them as one line.
+  const paidNow = (logFilter ? parents.filter(p => norm(p.name) === logFilter) : parents).reduce((a, p) => a + p.paid, 0);
+  const earlier = Math.max(paidNow - logged, 0);
+
+  $("logBody").innerHTML = (list.length || earlier)
+    ? list.map(l => `<tr><td>${esc(l.date)}</td><td>${esc(titleCase(l.parent))}</td><td class="r num">${fmt(l.amount)}</td><td>${esc(l.method)}</td><td>${esc(l.notes)}</td></tr>`).join("") +
+      (earlier ? `<tr><td class="muted">Earlier</td><td class="muted">No date recorded</td><td class="r num">${fmt(earlier)}</td><td class="muted" colspan="2">Paid before payments were logged</td></tr>` : "")
+    : `<tr><td colspan="5" class="empty">No jersey payments recorded yet.</td></tr>`;
+  $("logFoot").innerHTML = (list.length || earlier)
+    ? `<tr><td colspan="2">Total${logFilter ? "" : ` (${list.length} payment${list.length === 1 ? "" : "s"})`}</td><td class="r num">${fmt(logged + earlier)}</td><td colspan="2"></td></tr>` : "";
+}
+$("logFilters").addEventListener("click", e => {
+  const b = e.target.closest(".chipbtn"); if (!b) return;
+  logFilter = b.dataset.p; renderJerseyLog(lastLog, lastParents);
+});
 
 /* ===== Jersey list ===== */
 // "07" → "7", "00" → "0"; anything that isn't a plain number is left as typed.
@@ -841,7 +893,6 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   if (t.dataset.tab !== "admin") { $("pin").value = ""; $("pinMsg").textContent = ""; }
   $("tab-list").hidden = t.dataset.tab !== "list";
 }));
-$("refresh").addEventListener("click", () => load(true));
 $("year").textContent = new Date().getFullYear();
 load(false);
 setInterval(() => { if (!document.hidden) load(true); }, AUTO_REFRESH_SECONDS * 1000);
